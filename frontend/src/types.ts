@@ -1,0 +1,20 @@
+export interface User {
+  id: string;
+  username: string;
+}
+
+export interface Message {
+  id: string;
+  threadId: string;
+  senderId: string;
+  content: string;
+  senderName?: string;
+}
+
+export interface Thread {
+  id: string;
+  name: string;
+  participants: string[];
+  createdAt: string;
+  lastMessage?: Message;
+}
