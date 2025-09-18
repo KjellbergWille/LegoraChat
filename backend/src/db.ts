@@ -87,7 +87,14 @@ export const db = {
         m.id::text as last_message_id,
         m.content as last_message_content,
         m.sender_id::text as last_message_sender_id,
-        u.username as "last_message_senderName"
+        u.username as "last_message_senderName",
+        STRING_AGG(
+          CASE 
+            WHEN other_users.id != $1 THEN other_users.username 
+            ELSE NULL 
+          END, 
+          ', '
+        ) as other_participants
       FROM threads t
       JOIN thread_participants tp ON t.id = tp.thread_id
       LEFT JOIN LATERAL (
@@ -98,13 +105,16 @@ export const db = {
         LIMIT 1
       ) m ON true
       LEFT JOIN users u ON m.sender_id = u.id
+      LEFT JOIN thread_participants other_tp ON t.id = other_tp.thread_id AND other_tp.user_id != $1
+      LEFT JOIN users other_users ON other_tp.user_id = other_users.id
       WHERE tp.user_id = $1
+      GROUP BY t.id, t.name, t.created_at, m.id, m.content, m.sender_id, u.username
       ORDER BY t.created_at DESC
     `, [userId]);
 
     return result.rows.map(row => ({
       id: row.id,
-      name: row.name,
+      name: row.other_participants || 'Group Chat',
       participants: [],
       createdAt: row.created_at,
       lastMessage: row.last_message_id ? {
