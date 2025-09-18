@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { trpc } from '../utils/trpc';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 interface ChatViewProps {
   threadId: string;
@@ -18,6 +19,13 @@ export default function ChatView({ threadId, userId, onBack }: ChatViewProps) {
   const sendMessageMutation = trpc.sendMessage.useMutation({
     onSuccess: () => {
       setMessage('');
+      refetch();
+    }
+  });
+
+  // WebSocket for real-time updates
+  useWebSocket(userId, (message) => {
+    if (message.type === 'newMessage' && message.data.thread_id === threadId) {
       refetch();
     }
   });
@@ -74,10 +82,8 @@ export default function ChatView({ threadId, userId, onBack }: ChatViewProps) {
               }`}
             >
               {msg.senderId !== userId && (
-                <div className={`text-xs font-medium mb-1 ${
-                  msg.senderId === userId ? 'text-blue-100' : 'text-gray-600'
-                }`}>
-                  {(msg as any).sender_name || msg.senderName || 'Unknown'}
+                <div className="text-xs font-medium mb-1 text-gray-600">
+                  {msg.senderName || 'Unknown'}
                 </div>
               )}
               <div className="text-sm">{msg.content}</div>

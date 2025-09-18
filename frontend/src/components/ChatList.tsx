@@ -1,4 +1,5 @@
 import { trpc } from '../utils/trpc';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 interface ChatListProps {
   userId: string;
@@ -6,8 +7,15 @@ interface ChatListProps {
   selectedThreadId: string | null;
 }
 
-export default function ChatList({ onSelectThread, selectedThreadId }: ChatListProps) {
-  const { data: threads, isLoading } = trpc.getThreads.useQuery();
+export default function ChatList({ userId, onSelectThread, selectedThreadId }: ChatListProps) {
+  const { data: threads, isLoading, refetch } = trpc.getThreads.useQuery();
+
+  // WebSocket for real-time updates
+  useWebSocket(userId, (message) => {
+    if (message.type === 'newMessage') {
+      refetch();
+    }
+  });
 
   if (isLoading) {
     return (
@@ -34,7 +42,7 @@ export default function ChatList({ onSelectThread, selectedThreadId }: ChatListP
           <div className="font-medium text-gray-900">{thread.name}</div>
           {thread.lastMessage && (
             <div className="text-sm text-gray-500 truncate">
-              <span className="font-medium">{(thread.lastMessage as any).sender_name || thread.lastMessage.senderName || 'Unknown'}: </span>
+              <span className="font-medium">{thread.lastMessage.senderName || 'Unknown'}: </span>
               {thread.lastMessage.content}
             </div>
           )}

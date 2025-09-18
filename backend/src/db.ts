@@ -2,10 +2,10 @@ import { Pool } from 'pg';
 import { User, Message, Thread } from '../../shared/types';
 
 const pool = new Pool({
-  user: process.env.DB_USER || 'postgres',
+  user: process.env.DB_USER || 'willekjellberg',
   host: process.env.DB_HOST || 'localhost',
   database: process.env.DB_NAME || 'legorachat',
-  password: process.env.DB_PASSWORD || 'password',
+  password: process.env.DB_PASSWORD || '',
   port: parseInt(process.env.DB_PORT || '5432'),
 });
 
@@ -80,94 +80,70 @@ export const db = {
 
   async getThreadsForUser(userId: string): Promise<Thread[]> {
     const result = await pool.query(`
-      SELECT DISTINCT t.id::text, t.name, t.created_at
+      SELECT DISTINCT 
+        t.id::text, 
+        t.name, 
+        t.created_at,
+        m.id::text as last_message_id,
+        m.content as last_message_content,
+        m.sender_id::text as last_message_sender_id,
+        u.username as "last_message_senderName"
       FROM threads t
       JOIN thread_participants tp ON t.id = tp.thread_id
+      LEFT JOIN LATERAL (
+        SELECT m.id, m.content, m.sender_id
+        FROM messages m 
+        WHERE m.thread_id = t.id 
+        ORDER BY m.created_at DESC 
+        LIMIT 1
+      ) m ON true
+      LEFT JOIN users u ON m.sender_id = u.id
       WHERE tp.user_id = $1
       ORDER BY t.created_at DESC
     `, [userId]);
 
-    // Get last message and other participants for each thread
-    const threads = await Promise.all(result.rows.map(async (row) => {
-      const lastMessageResult = await pool.query(`
-        SELECT m.id::text, m.content, m.sender_id::text, u.username as sender_name
-        FROM messages m 
-        JOIN users u ON m.sender_id = u.id
-        WHERE m.thread_id = $1 
-        ORDER BY m.created_at DESC 
-        LIMIT 1
-      `, [row.id]);
-
-      // Get other participants (not the current user)
-      const participantsResult = await pool.query(`
-        SELECT u.username
-        FROM thread_participants tp
-        JOIN users u ON tp.user_id = u.id
-        WHERE tp.thread_id = $1 AND tp.user_id != $2
-        ORDER BY u.username
-      `, [row.id, userId]);
-
-      const otherParticipants = participantsResult.rows.map(p => p.username);
-      const displayName = otherParticipants.length > 0 ? otherParticipants.join(', ') : row.name;
-
-      const lastMessage = lastMessageResult.rows[0] ? {
-        id: lastMessageResult.rows[0].id,
+    return result.rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      participants: [],
+      createdAt: row.created_at,
+      lastMessage: row.last_message_id ? {
+        id: row.last_message_id,
         threadId: row.id,
-        senderId: lastMessageResult.rows[0].sender_id,
-        content: lastMessageResult.rows[0].content,
-        senderName: lastMessageResult.rows[0].sender_name
-      } : undefined;
-
-      return {
-        id: row.id,
-        name: displayName,
-        participants: [],
-        createdAt: row.created_at,
-        lastMessage
-      };
+        senderId: row.last_message_sender_id,
+        content: row.last_message_content,
+        senderName: row.last_message_senderName
+      } : undefined
     }));
-
-    return threads;
   },
 
   async createThread(name: string, participantIds: string[]): Promise<Thread> {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      
-      const threadResult = await client.query(
-        'INSERT INTO threads (name) VALUES ($1) RETURNING id::text, name, created_at',
-        [name]
+    const threadResult = await pool.query(
+      'INSERT INTO threads (name) VALUES ($1) RETURNING id::text, name, created_at',
+      [name]
+    );
+    const thread = threadResult.rows[0];
+
+    // Insert participants
+    const uniqueParticipantIds = [...new Set(participantIds)];
+    for (const userId of uniqueParticipantIds) {
+      await pool.query(
+        'INSERT INTO thread_participants (thread_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [thread.id, userId]
       );
-      const thread = threadResult.rows[0];
-
-      // Remove duplicates and insert participants
-      const uniqueParticipantIds = [...new Set(participantIds)];
-      for (const userId of uniqueParticipantIds) {
-        await client.query(
-          'INSERT INTO thread_participants (thread_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-          [thread.id, userId]
-        );
-      }
-
-      await client.query('COMMIT');
-      return {
-        id: thread.id,
-        name: thread.name,
-        participants: uniqueParticipantIds,
-        createdAt: thread.created_at
-      };
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
     }
+
+    return {
+      id: thread.id,
+      name: thread.name,
+      participants: uniqueParticipantIds,
+      createdAt: thread.created_at
+    };
   },
 
   async getMessagesForThread(threadId: string): Promise<Message[]> {
     const result = await pool.query(`
-      SELECT m.id::text, m.thread_id::text, m.sender_id::text, m.content, u.username as sender_name
+      SELECT m.id::text, m.thread_id::text, m.sender_id::text, m.content, u.username as "senderName"
       FROM messages m
       JOIN users u ON m.sender_id = u.id
       WHERE m.thread_id = $1
@@ -182,14 +158,24 @@ export const db = {
       VALUES ($1, $2, $3) 
       RETURNING id::text, thread_id::text, sender_id::text, content, created_at
     `, [threadId, senderId, content]);
-    return result.rows[0];
+    
+    // Get sender name
+    const senderResult = await pool.query(
+      'SELECT username FROM users WHERE id = $1',
+      [senderId]
+    );
+    
+    return {
+      ...result.rows[0],
+      senderName: senderResult.rows[0]?.username
+    };
   },
 
-  async getUserById(userId: string): Promise<User | null> {
+  async getThreadParticipants(threadId: string): Promise<string[]> {
     const result = await pool.query(
-      'SELECT id::text, username, password, created_at FROM users WHERE id = $1',
-      [userId]
+      'SELECT user_id::text FROM thread_participants WHERE thread_id = $1',
+      [threadId]
     );
-    return result.rows[0] || null;
+    return result.rows.map(row => row.user_id);
   }
 };

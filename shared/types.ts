@@ -2,7 +2,7 @@ export interface User {
   id: string;
   username: string;
   password: string;
-  createdAt: Date;
+  createdAt: string;
 }
 
 export interface Message {
@@ -17,7 +17,7 @@ export interface Thread {
   id: string;
   name: string;
   participants: string[];
-  createdAt: Date;
+  createdAt: string;
   lastMessage?: Message;
 }
 

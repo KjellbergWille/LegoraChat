@@ -2,12 +2,12 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 import { appRouter } from './router';
 import { db } from './db';
 
 const app = express();
-const port = 3001;
+const port = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors());
@@ -62,14 +62,18 @@ wss.on('connection', (ws, req) => {
 // Broadcast message to all participants in a thread
 export const broadcastToThread = async (threadId: string, message: any) => {
   // Get all participants in the thread
-  const participants = await db.getThreadsForUser(''); // This needs to be fixed
-  // For now, broadcast to all connected users
-  connections.forEach((userConnections) => {
-    userConnections.forEach((ws) => {
-      if (ws.readyState === ws.OPEN) {
-        ws.send(JSON.stringify({ type: 'newMessage', data: message }));
-      }
-    });
+  const participants = await db.getThreadParticipants(threadId);
+  
+  // Broadcast to all connected participants
+  participants.forEach((userId) => {
+    const userConnections = connections.get(userId);
+    if (userConnections) {
+      userConnections.forEach((ws) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'newMessage', data: message }));
+        }
+      });
+    }
   });
 };
 
