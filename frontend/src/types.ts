@@ -1,2 +1,22 @@
-// Re-export types from shared module
-export type { User, Message, Thread } from '../../../shared/types';
+export interface User {
+  id: string;
+  username: string;
+  password: string;
+  createdAt: string;
+}
+
+export interface Message {
+  id: string;
+  threadId: string;
+  senderId: string;
+  content: string;
+  senderName?: string;
+}
+
+export interface Thread {
+  id: string;
+  name: string;
+  participants: string[];
+  createdAt: string;
+  lastMessage?: Message;
+}

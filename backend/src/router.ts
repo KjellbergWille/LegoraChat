@@ -44,8 +44,7 @@ export const appRouter = t.router({
         }
       }
       
-      const threadName = input.participantUsernames.join(', ');
-      return await db.createThread(threadName, participantIds);
+      return await db.createThread(participantIds);
     }),
 
   getMessages: t.procedure

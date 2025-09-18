@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { User, Message, Thread } from '../../shared/types';
+import { User, Message, Thread } from './types';
 
 const pool = new Pool({
   user: process.env.DB_USER || 'willekjellberg',
@@ -82,7 +82,6 @@ export const db = {
     const result = await pool.query(`
       SELECT DISTINCT 
         t.id::text, 
-        t.name, 
         t.created_at,
         m.id::text as last_message_id,
         m.content as last_message_content,
@@ -108,7 +107,7 @@ export const db = {
       LEFT JOIN thread_participants other_tp ON t.id = other_tp.thread_id AND other_tp.user_id != $1
       LEFT JOIN users other_users ON other_tp.user_id = other_users.id
       WHERE tp.user_id = $1
-      GROUP BY t.id, t.name, t.created_at, m.id, m.content, m.sender_id, u.username
+      GROUP BY t.id, t.created_at, m.id, m.content, m.sender_id, u.username
       ORDER BY t.created_at DESC
     `, [userId]);
 
@@ -127,10 +126,10 @@ export const db = {
     }));
   },
 
-  async createThread(name: string, participantIds: string[]): Promise<Thread> {
+  async createThread(participantIds: string[]): Promise<Thread> {
     const threadResult = await pool.query(
       'INSERT INTO threads (name) VALUES ($1) RETURNING id::text, name, created_at',
-      [name]
+      ['Chat'] // Static name since we use dynamic names in getThreadsForUser
     );
     const thread = threadResult.rows[0];
 
