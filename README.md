@@ -23,60 +23,30 @@ A simple messaging app similar to Facebook Messenger or WhatsApp, built with Rea
 - PostgreSQL (v12 or higher)
 - npm or yarn
 
-## Setup Instructions
+## Quick Start
 
 ### 1. Database Setup
 
-First, make sure PostgreSQL is running and create a database:
+Make sure PostgreSQL is running and create a database:
 
 ```sql
 CREATE DATABASE legorachat;
 ```
 
-Update the database connection settings in `backend/src/db.ts` if needed:
-```typescript
-const pool = new Pool({
-  user: 'postgres',
-  host: 'localhost',
-  database: 'legorachat',
-  password: 'password', // Change this to your PostgreSQL password
-  port: 5432,
-});
-```
+### 2. Install and Run
 
-### 2. Backend Setup
-
-Navigate to the backend directory and install dependencies:
+Install all dependencies and start both frontend and backend:
 
 ```bash
-cd backend
-npm install
-```
-
-Start the backend server:
-
-```bash
+npm run install:all
 npm run dev
 ```
 
-The backend will run on `http://localhost:3001` and automatically create the necessary database tables and seed some test users.
+This will start:
+- Backend on `http://localhost:3001`
+- Frontend on `http://localhost:3000`
 
-### 3. Frontend Setup
-
-In a new terminal, navigate to the frontend directory and install dependencies:
-
-```bash
-cd frontend
-npm install
-```
-
-Start the frontend development server:
-
-```bash
-npm run dev
-```
-
-The frontend will run on `http://localhost:3000`.
+The backend will automatically create the necessary database tables and seed test users.
 
 ## Usage
 
@@ -102,54 +72,46 @@ LegoraChat/
 │   │   ├── server.ts       # Express server setup
 │   │   ├── router.ts       # tRPC router with API endpoints
 │   │   ├── db.ts          # Database operations
-│   │   └── types.ts       # Zod schemas
-│   └── package.json
+│   │   ├── db-utils.ts    # Database utility functions
+│   │   └── types.ts       # Zod schemas and TypeScript interfaces
+│   ├── dist/              # Compiled JavaScript files
+│   ├── package.json
+│   └── tsconfig.json
 ├── frontend/               # React frontend
 │   ├── src/
 │   │   ├── components/     # React components
+│   │   │   ├── ChatList.tsx
+│   │   │   ├── ChatView.tsx
+│   │   │   ├── Login.tsx
+│   │   │   └── NewThread.tsx
+│   │   ├── hooks/         # Custom React hooks
+│   │   │   └── useWebSocket.ts
 │   │   ├── utils/         # tRPC client setup
-│   │   └── types.ts       # TypeScript types
-│   └── package.json
-├── shared/                 # Shared types
-│   └── types.ts
+│   │   │   └── trpc.ts
+│   │   ├── App.tsx        # Main application component
+│   │   ├── main.tsx       # Application entry point
+│   │   ├── types.ts       # TypeScript interfaces (duplicated from backend)
+│   │   └── index.css      # Global styles
+│   ├── dist/              # Built frontend files
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tailwind.config.js
+│   └── tsconfig.json
+├── docker-compose.yml      # Docker configuration
+├── package.json           # Root package with dev scripts
 └── README.md
 ```
 
-## API Endpoints
-
-The app uses tRPC for type-safe API communication:
-
-- `login` - Authenticate user or create new account
-- `getThreads` - Get all chat threads for a user
-- `createThread` - Create a new chat thread
-- `getMessages` - Get messages for a specific thread
-- `sendMessage` - Send a new message
+**Note**: Currently, both frontend and backend have their own `types.ts` files with identical interfaces (User, Message, Thread). This creates duplication and potential for type drift. Consider creating a shared types package to eliminate this duplication.
 
 ## Development
 
-To run both frontend and backend in development mode:
-
 ```bash
-# Terminal 1 - Backend
-cd backend
-npm run dev
-
-# Terminal 2 - Frontend
-cd frontend
 npm run dev
 ```
 
 ## Building for Production
 
 ```bash
-# Backend
-cd backend
-npm run build
-npm start
-
-# Frontend
-cd frontend
 npm run build
 ```
-
-The built frontend files will be in the `frontend/dist` directory.
