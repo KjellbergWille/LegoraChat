@@ -12,13 +12,13 @@ export const appRouter = t.router({
       const user = await db.getUserByUsername(input.username);
       
       if (user && user.password === input.password) {
-        return { success: true, user: { id: user.id, username: user.username } };
+        return { success: true, user: { id: user.id, username: user.username, password: user.password, createdAt: user.createdAt } };
       }
       
       if (!user) {
         // Create new user
         const newUser = await db.createUser(input.username, input.password);
-        return { success: true, user: { id: newUser.id, username: newUser.username } };
+        return { success: true, user: { id: newUser.id, username: newUser.username, password: newUser.password, createdAt: newUser.createdAt } };
       }
       
       return { success: false, error: 'Invalid password' };

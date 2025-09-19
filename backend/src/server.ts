@@ -23,7 +23,7 @@ app.use(cors());
 app.use(express.json());
 
 // Simple auth middleware (in production, use proper JWT)
-const authMiddleware = (req: any, res: any, next: any) => {
+const authMiddleware = (req: any, _res: any, next: any) => {
   const userId = req.headers['x-user-id'];
   req.userId = userId;
   next();
