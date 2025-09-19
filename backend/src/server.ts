@@ -123,17 +123,35 @@ const appRouter = t.router({
   onNewMessage: protectedProcedure
     .input(z.object({ threadId: z.string() }))
     .subscription(async function* ({ input }) {
-      // This is a simple implementation - in production you'd use a proper pub/sub system
-      // For now, we'll yield the current messages and let the client handle updates
+      // Yield current messages first
       const messages = await db.getMessagesForThread(input.threadId);
       yield messages;
+      
+      // Then listen for new messages via WebSocket
+      // This is a simplified implementation - in production use Redis pub/sub
+      while (true) {
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Check every second
+        const newMessages = await db.getMessagesForThread(input.threadId);
+        if (newMessages.length > messages.length) {
+          yield newMessages;
+        }
+      }
     }),
 
   onThreadsUpdate: protectedProcedure
     .subscription(async function* ({ ctx }) {
-      // Yield current threads for the user
+      // Yield current threads first
       const threads = await db.getThreadsForUser(ctx.userId);
       yield threads;
+      
+      // Then listen for thread updates
+      while (true) {
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Check every second
+        const newThreads = await db.getThreadsForUser(ctx.userId);
+        if (JSON.stringify(newThreads) !== JSON.stringify(threads)) {
+          yield newThreads;
+        }
+      }
     }),
 });
 

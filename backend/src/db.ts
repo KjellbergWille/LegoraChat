@@ -110,7 +110,6 @@ export const db = {
     return result.rows.map(row => ({
       id: row.id,
       name: row.name,
-      participants: [], // We don't need this for the UI currently
       createdAt: row.created_at,
       lastMessage: row.lastMessageId ? {
         id: row.lastMessageId,
@@ -141,7 +140,6 @@ export const db = {
     return {
       id: thread.id,
       name: thread.name,
-      participants: uniqueParticipantIds,
       createdAt: thread.created_at
     };
   },

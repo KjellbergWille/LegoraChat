@@ -12,9 +12,9 @@ export default function ChatList({ onSelectThread, selectedThreadId }: ChatListP
 
   // Real-time subscription for thread updates
   trpc.onThreadsUpdate.useSubscription(undefined, {
-    onData: () => {
-      // The subscription will automatically update the cache
-      // No need for manual refetch
+    onData: (threads) => {
+      // Update the cache with new threads
+      utils.getThreads.setData(undefined, threads);
     }
   });
 

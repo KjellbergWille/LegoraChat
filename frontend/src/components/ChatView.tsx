@@ -19,9 +19,9 @@ export default function ChatView({ threadId, userId, onBack }: ChatViewProps) {
   trpc.onNewMessage.useSubscription(
     { threadId },
     {
-      onData: () => {
-        // The subscription will automatically update the cache
-        // No need for manual refetch
+      onData: (messages) => {
+        // Update the cache with new messages
+        utils.getMessages.setData({ threadId }, messages);
       }
     }
   );

@@ -21,7 +21,6 @@ export interface Message {
 export interface Thread {
   id: string;
   name: string;
-  participants: string[];
   createdAt: string;
   lastMessage?: Message;
 }
