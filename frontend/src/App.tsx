@@ -4,7 +4,6 @@ import { trpc, createTRPCClient } from './utils/trpc';
 import Login from './components/Login';
 import ChatList from './components/ChatList';
 import ChatView from './components/ChatView';
-import NewThread from './components/NewThread';
 import { User } from '@legorachat/shared';
 
 const queryClient = new QueryClient();
@@ -12,7 +11,6 @@ const queryClient = new QueryClient();
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
-  const [showNewThread, setShowNewThread] = useState(false);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
@@ -54,12 +52,6 @@ function App() {
               <h1 className="text-xl font-bold">LegoraChat</h1>
               <div className="flex gap-2">
                 <button
-                  onClick={() => setShowNewThread(true)}
-                  className="px-3 py-1 bg-blue-500 text-white rounded text-sm"
-                >
-                  New Chat
-                </button>
-                <button
                   onClick={handleLogout}
                   className="px-3 py-1 bg-gray-500 text-white rounded text-sm"
                 >
@@ -87,16 +79,6 @@ function App() {
             </div>
           )}
         </div>
-        {showNewThread && (
-          <NewThread
-            userId={user.id}
-            onClose={() => setShowNewThread(false)}
-            onThreadCreated={(threadId) => {
-              setSelectedThreadId(threadId);
-              setShowNewThread(false);
-            }}
-          />
-        )}
         </div>
       </QueryClientProvider>
     </trpc.Provider>

@@ -79,51 +79,57 @@ export const db = {
   },
 
   async getThreadsForUser(userId: string): Promise<Thread[]> {
-    const result = await pool.query(`
-      SELECT DISTINCT 
-        t.id::text, 
-        t.created_at,
-        m.id::text as last_message_id,
-        m.content as last_message_content,
-        m.sender_id::text as last_message_sender_id,
-        u.username as "last_message_senderName",
-        STRING_AGG(
-          CASE 
-            WHEN other_users.id != $1 THEN other_users.username 
-            ELSE NULL 
-          END, 
-          ', '
-        ) as other_participants
+    // 1. Get basic thread info
+    const threadsResult = await pool.query(`
+      SELECT t.id::text, t.created_at
       FROM threads t
-      JOIN thread_participants tp ON t.id = tp.thread_id
-      LEFT JOIN LATERAL (
-        SELECT m.id, m.content, m.sender_id
-        FROM messages m 
-        WHERE m.thread_id = t.id 
-        ORDER BY m.created_at DESC 
-        LIMIT 1
-      ) m ON true
-      LEFT JOIN users u ON m.sender_id = u.id
-      LEFT JOIN thread_participants other_tp ON t.id = other_tp.thread_id AND other_tp.user_id != $1
-      LEFT JOIN users other_users ON other_tp.user_id = other_users.id
+      JOIN thread_participants tp ON t.id = tp.thread_id 
       WHERE tp.user_id = $1
-      GROUP BY t.id, t.created_at, m.id, m.content, m.sender_id, u.username
       ORDER BY t.created_at DESC
     `, [userId]);
 
-    return result.rows.map(row => ({
-      id: row.id,
-      name: row.other_participants || 'Group Chat',
-      participants: [],
-      createdAt: row.created_at,
-      lastMessage: row.last_message_id ? {
-        id: row.last_message_id,
-        threadId: row.id,
-        senderId: row.last_message_sender_id,
-        content: row.last_message_content,
-        senderName: row.last_message_senderName
-      } : undefined
-    }));
+    const threads = [];
+
+    // 2. For each thread, get thread name and last message
+    for (const thread of threadsResult.rows) {
+      // Get other participants (thread name)
+      const participantsResult = await pool.query(`
+        SELECT u.username 
+        FROM users u
+        JOIN thread_participants tp ON u.id = tp.user_id
+        WHERE tp.thread_id = $1 AND u.id != $2
+      `, [thread.id, userId]);
+      
+      const threadName = participantsResult.rows.map(p => p.username).join(', ') || 'Group Chat';
+
+      // Get last message (optional)
+      const lastMessageResult = await pool.query(`
+        SELECT m.id::text, m.content, m.sender_id::text, u.username as "senderName"
+        FROM messages m
+        JOIN users u ON m.sender_id = u.id
+        WHERE m.thread_id = $1
+        ORDER BY m.created_at DESC
+        LIMIT 1
+      `, [thread.id]);
+
+      const lastMessage = lastMessageResult.rows[0] ? {
+        id: lastMessageResult.rows[0].id,
+        threadId: thread.id,
+        senderId: lastMessageResult.rows[0].sender_id,
+        content: lastMessageResult.rows[0].content,
+        senderName: lastMessageResult.rows[0].senderName
+      } : undefined;
+
+      threads.push({
+        id: thread.id,
+        name: threadName,
+        participants: [],
+        createdAt: thread.created_at,
+        lastMessage
+      });
+    }
+
+    return threads;
   },
 
   async createThread(participantIds: string[]): Promise<Thread> {
