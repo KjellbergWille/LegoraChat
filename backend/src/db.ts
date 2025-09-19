@@ -156,6 +156,19 @@ export const db = {
     };
   },
 
+  async createThreadWithParticipants(currentUserId: string, participantUsernames: string[]): Promise<Thread> {
+    // Get user IDs for participants
+    const participantIds = [currentUserId];
+    for (const username of participantUsernames) {
+      const user = await this.getUserByUsername(username);
+      if (user) {
+        participantIds.push(user.id);
+      }
+    }
+    
+    return await this.createThread(participantIds);
+  },
+
   async getMessagesForThread(threadId: string): Promise<Message[]> {
     const result = await pool.query(`
       SELECT m.id::text, m.thread_id::text, m.sender_id::text, m.content, u.username as "senderName"

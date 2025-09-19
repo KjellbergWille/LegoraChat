@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { trpc } from '../utils/trpc';
+import { usePolling } from '../hooks/usePolling';
 
 interface ChatListProps {
   onSelectThread: (threadId: string) => void;
@@ -19,13 +20,7 @@ export default function ChatList({ onSelectThread, selectedThreadId }: ChatListP
   });
 
   // Polling for real-time updates (every 3 seconds)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refetch();
-    }, 3000);
-    
-    return () => clearInterval(interval);
-  }, [refetch]);
+  usePolling(refetch, 3000);
 
   const handleCreateThread = () => {
     if (!newThreadInput.trim()) return;

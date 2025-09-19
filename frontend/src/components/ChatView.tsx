@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { trpc } from '../utils/trpc';
+import { usePolling } from '../hooks/usePolling';
 
 interface ChatViewProps {
   threadId: string;
@@ -23,13 +24,7 @@ export default function ChatView({ threadId, userId, onBack }: ChatViewProps) {
   });
 
   // Polling for real-time updates (every 2 seconds)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refetch();
-    }, 2000);
-    
-    return () => clearInterval(interval);
-  }, [refetch]);
+  usePolling(refetch, 2000);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
