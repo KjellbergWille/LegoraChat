@@ -70,7 +70,6 @@ function App() {
             <p className="text-sm text-gray-600">Welcome, {user.username}!</p>
           </div>
           <ChatList
-            userId={user.id}
             onSelectThread={setSelectedThreadId}
             selectedThreadId={selectedThreadId}
           />

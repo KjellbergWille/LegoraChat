@@ -60,10 +60,6 @@ export const appRouter = t.router({
       if (!ctx.userId) throw new Error('Not authenticated');
       const message = await db.addMessage(input.threadId, ctx.userId, input.content);
       
-      // Broadcast the message to all participants
-      const { broadcastToThread } = await import('./server');
-      await broadcastToThread(input.threadId, message);
-      
       return message;
     }),
 });

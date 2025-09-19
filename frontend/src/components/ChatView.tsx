@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { trpc } from '../utils/trpc';
-import { useWebSocket } from '../hooks/useWebSocket';
 
 interface ChatViewProps {
   threadId: string;
@@ -23,12 +22,14 @@ export default function ChatView({ threadId, userId, onBack }: ChatViewProps) {
     }
   });
 
-  // WebSocket for real-time updates
-  useWebSocket(userId, (message) => {
-    if (message.type === 'newMessage' && message.data.thread_id === threadId) {
+  // Polling for real-time updates (every 2 seconds)
+  useEffect(() => {
+    const interval = setInterval(() => {
       refetch();
-    }
-  });
+    }, 2000);
+    
+    return () => clearInterval(interval);
+  }, [refetch]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

@@ -1,21 +1,22 @@
+import { useEffect } from 'react';
 import { trpc } from '../utils/trpc';
-import { useWebSocket } from '../hooks/useWebSocket';
 
 interface ChatListProps {
-  userId: string;
   onSelectThread: (threadId: string) => void;
   selectedThreadId: string | null;
 }
 
-export default function ChatList({ userId, onSelectThread, selectedThreadId }: ChatListProps) {
+export default function ChatList({ onSelectThread, selectedThreadId }: ChatListProps) {
   const { data: threads, isLoading, refetch } = trpc.getThreads.useQuery();
 
-  // WebSocket for real-time updates
-  useWebSocket(userId, (message) => {
-    if (message.type === 'newMessage') {
+  // Polling for real-time updates (every 3 seconds)
+  useEffect(() => {
+    const interval = setInterval(() => {
       refetch();
-    }
-  });
+    }, 3000);
+    
+    return () => clearInterval(interval);
+  }, [refetch]);
 
   if (isLoading) {
     return (
