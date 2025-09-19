@@ -79,57 +79,47 @@ export const db = {
   },
 
   async getThreadsForUser(userId: string): Promise<Thread[]> {
-    // 1. Get basic thread info
-    const threadsResult = await pool.query(`
-      SELECT t.id::text, t.created_at
+    // Optimized single query with JOINs and window functions
+    const result = await pool.query(`
+      SELECT 
+        t.id::text,
+        t.created_at,
+        COALESCE(
+          (SELECT string_agg(u.username, ', ') 
+           FROM users u 
+           JOIN thread_participants tp_inner ON u.id = tp_inner.user_id 
+           WHERE tp_inner.thread_id = t.id AND u.id != $1), 
+          'Group Chat'
+        ) as name,
+        lm.id::text as "lastMessageId",
+        lm.content as "lastMessageContent",
+        lm.sender_id::text as "lastMessageSenderId",
+        lm_sender.username as "lastMessageSenderName"
       FROM threads t
-      JOIN thread_participants tp ON t.id = tp.thread_id 
+      JOIN thread_participants tp ON t.id = tp.thread_id
+      LEFT JOIN (
+        SELECT *, 
+               ROW_NUMBER() OVER(PARTITION BY thread_id ORDER BY created_at DESC) as rn
+        FROM messages
+      ) lm ON lm.thread_id = t.id AND lm.rn = 1
+      LEFT JOIN users lm_sender ON lm.sender_id = lm_sender.id
       WHERE tp.user_id = $1
-      ORDER BY t.created_at DESC
+      ORDER BY COALESCE(lm.created_at, t.created_at) DESC
     `, [userId]);
 
-    const threads = [];
-
-    // 2. For each thread, get thread name and last message
-    for (const thread of threadsResult.rows) {
-      // Get other participants (thread name)
-      const participantsResult = await pool.query(`
-        SELECT u.username 
-        FROM users u
-        JOIN thread_participants tp ON u.id = tp.user_id
-        WHERE tp.thread_id = $1 AND u.id != $2
-      `, [thread.id, userId]);
-      
-      const threadName = participantsResult.rows.map(p => p.username).join(', ') || 'Group Chat';
-
-      // Get last message (optional)
-      const lastMessageResult = await pool.query(`
-        SELECT m.id::text, m.content, m.sender_id::text, u.username as "senderName"
-        FROM messages m
-        JOIN users u ON m.sender_id = u.id
-        WHERE m.thread_id = $1
-        ORDER BY m.created_at DESC
-        LIMIT 1
-      `, [thread.id]);
-
-      const lastMessage = lastMessageResult.rows[0] ? {
-        id: lastMessageResult.rows[0].id,
-        threadId: thread.id,
-        senderId: lastMessageResult.rows[0].sender_id,
-        content: lastMessageResult.rows[0].content,
-        senderName: lastMessageResult.rows[0].senderName
-      } : undefined;
-
-      threads.push({
-        id: thread.id,
-        name: threadName,
-        participants: [],
-        createdAt: thread.created_at,
-        lastMessage
-      });
-    }
-
-    return threads;
+    return result.rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      participants: [], // We don't need this for the UI currently
+      createdAt: row.created_at,
+      lastMessage: row.lastMessageId ? {
+        id: row.lastMessageId,
+        threadId: row.id,
+        senderId: row.lastMessageSenderId,
+        content: row.lastMessageContent,
+        senderName: row.lastMessageSenderName
+      } : undefined
+    }));
   },
 
   async createThread(participantIds: string[]): Promise<Thread> {

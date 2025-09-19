@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { trpc, createTRPCClient } from './utils/trpc';
 import Login from './components/Login';
@@ -30,7 +30,8 @@ function App() {
     localStorage.removeItem('user');
   };
 
-  const trpcClient = createTRPCClient(user?.id);
+  // Memoize tRPC client to prevent recreation on every render
+  const trpcClient = useMemo(() => createTRPCClient(user?.id), [user?.id]);
 
   if (!user) {
     return (

@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { trpc } from '../utils/trpc';
-import { usePolling } from '../hooks/usePolling';
 
 interface ChatViewProps {
   threadId: string;
@@ -12,19 +11,30 @@ export default function ChatView({ threadId, userId, onBack }: ChatViewProps) {
   const [message, setMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { data: messages, isLoading, refetch } = trpc.getMessages.useQuery(
+  const { data: messages, isLoading } = trpc.getMessages.useQuery(
     { threadId }
   );
+
+  // Real-time subscription for new messages
+  trpc.onNewMessage.useSubscription(
+    { threadId },
+    {
+      onData: () => {
+        // The subscription will automatically update the cache
+        // No need for manual refetch
+      }
+    }
+  );
+
+  const utils = trpc.useContext();
 
   const sendMessageMutation = trpc.sendMessage.useMutation({
     onSuccess: () => {
       setMessage('');
-      refetch();
+      // Invalidate and refetch messages for this thread
+      utils.getMessages.invalidate({ threadId });
     }
   });
-
-  // Polling for real-time updates (every 2 seconds)
-  usePolling(refetch, 2000);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

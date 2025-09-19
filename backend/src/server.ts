@@ -4,6 +4,8 @@ import cors from 'cors';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { initTRPC } from '@trpc/server';
 import { z } from 'zod';
+import { WebSocketServer } from 'ws';
+import { applyWSSHandler } from '@trpc/server/adapters/ws';
 import { db } from './db';
 import { loginSchema, createThreadSchema, sendMessageSchema } from '@legorachat/shared';
 
@@ -22,6 +24,17 @@ const port = process.env.PORT || 3001;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Create WebSocket server
+const server = app.listen(port, async () => {
+  console.log(`Server running on http://localhost:${port}`);
+  
+  // Initialize database
+  await db.init();
+  console.log('Database initialized');
+});
+
+const wss = new WebSocketServer({ server });
 
 // Simple auth middleware (in production, use proper JWT)
 const authMiddleware = (req: any, _res: any, next: any) => {
@@ -67,7 +80,17 @@ const appRouter = t.router({
   createThread: protectedProcedure
     .input(createThreadSchema)
     .mutation(async ({ input, ctx }) => {
-      return await db.createThreadWithParticipants(ctx.userId, input.participantUsernames);
+      const thread = await db.createThreadWithParticipants(ctx.userId, input.participantUsernames);
+      // Emit to all participants
+      wss.clients.forEach((client) => {
+        if (client.readyState === 1) { // WebSocket.OPEN
+          client.send(JSON.stringify({
+            type: 'threadCreated',
+            data: thread
+          }));
+        }
+      });
+      return thread;
     }),
 
   getMessages: protectedProcedure
@@ -80,7 +103,37 @@ const appRouter = t.router({
     .input(sendMessageSchema)
     .mutation(async ({ input, ctx }) => {
       const message = await db.addMessage(input.threadId, ctx.userId, input.content);
+      
+      // Emit to all participants of the thread
+      const participants = await db.getThreadParticipants(input.threadId);
+      wss.clients.forEach((client) => {
+        if (client.readyState === 1) { // WebSocket.OPEN
+          client.send(JSON.stringify({
+            type: 'newMessage',
+            data: message,
+            threadId: input.threadId
+          }));
+        }
+      });
+      
       return message;
+    }),
+
+  // Real-time subscriptions
+  onNewMessage: protectedProcedure
+    .input(z.object({ threadId: z.string() }))
+    .subscription(async function* ({ input }) {
+      // This is a simple implementation - in production you'd use a proper pub/sub system
+      // For now, we'll yield the current messages and let the client handle updates
+      const messages = await db.getMessagesForThread(input.threadId);
+      yield messages;
+    }),
+
+  onThreadsUpdate: protectedProcedure
+    .subscription(async function* ({ ctx }) {
+      // Yield current threads for the user
+      const threads = await db.getThreadsForUser(ctx.userId);
+      yield threads;
     }),
 });
 
@@ -92,13 +145,16 @@ app.use('/trpc', authMiddleware, createExpressMiddleware({
   }),
 }));
 
-// Start server
-app.listen(port, async () => {
-  console.log(`Server running on http://localhost:${port}`);
-  
-  // Initialize database
-  await db.init();
-  console.log('Database initialized');
+// Apply WebSocket handler
+applyWSSHandler({
+  wss,
+  router: appRouter,
+  createContext: ({ req }) => {
+    const userId = req.headers['x-user-id'];
+    return {
+      userId: Array.isArray(userId) ? userId[0] : userId,
+    };
+  },
 });
 
 export { appRouter };

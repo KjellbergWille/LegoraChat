@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { trpc } from '../utils/trpc';
-import { usePolling } from '../hooks/usePolling';
 
 interface ChatListProps {
   onSelectThread: (threadId: string) => void;
@@ -9,18 +8,26 @@ interface ChatListProps {
 
 export default function ChatList({ onSelectThread, selectedThreadId }: ChatListProps) {
   const [newThreadInput, setNewThreadInput] = useState('');
-  const { data: threads, isLoading, refetch } = trpc.getThreads.useQuery();
+  const { data: threads, isLoading } = trpc.getThreads.useQuery();
+
+  // Real-time subscription for thread updates
+  trpc.onThreadsUpdate.useSubscription(undefined, {
+    onData: () => {
+      // The subscription will automatically update the cache
+      // No need for manual refetch
+    }
+  });
+
+  const utils = trpc.useContext();
 
   const createThreadMutation = trpc.createThread.useMutation({
     onSuccess: (thread) => {
       setNewThreadInput('');
+      // Invalidate threads list to get updated data
+      utils.getThreads.invalidate();
       onSelectThread(thread.id);
-      refetch();
     }
   });
-
-  // Polling for real-time updates (every 3 seconds)
-  usePolling(refetch, 3000);
 
   const handleCreateThread = () => {
     if (!newThreadInput.trim()) return;
