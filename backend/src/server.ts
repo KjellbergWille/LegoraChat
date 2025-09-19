@@ -6,6 +6,15 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { appRouter } from './router';
 import { db } from './db';
 
+// Extend Express Request interface to include userId
+declare global {
+  namespace Express {
+    interface Request {
+      userId?: string;
+    }
+  }
+}
+
 const app = express();
 const port = process.env.PORT || 3001;
 
