@@ -5,7 +5,7 @@ import Login from './components/Login';
 import ChatList from './components/ChatList';
 import ChatView from './components/ChatView';
 import NewThread from './components/NewThread';
-import { User } from './types';
+import { User } from '@legorachat/shared';
 
 const queryClient = new QueryClient();
 

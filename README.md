@@ -1,117 +1,73 @@
 # LegoraChat
 
-A simple messaging app similar to Facebook Messenger or WhatsApp, built with React, TypeScript, Node.js, and PostgreSQL.
+Real-time messaging app built with React, TypeScript, Node.js, and PostgreSQL.
 
 ## Features
 
-- **Authentication**: Users can log in with username/password. If the username doesn't exist, a new account is created automatically.
-- **Messaging**: Create new chat threads with other users and send messages in real-time.
-- **Real-time Updates**: Messages appear automatically without page refresh.
-- **Type Safety**: End-to-end type safety with tRPC and TypeScript.
+- **Login**: Username/password authentication with auto-registration
+- **Real-time Chat**: Create threads, send messages, receive updates instantly
+- **Direct Messages**: Start conversations with other users by username
+- **Type Safety**: End-to-end type safety with tRPC
 
 ## Tech Stack
 
-- **Frontend**: React with TypeScript and Tailwind CSS
-- **Backend**: Node.js with TypeScript and Express
-- **API**: tRPC for type-safe API communication
+- **Frontend**: React + TypeScript + Tailwind CSS + Vite
+- **Backend**: Node.js + Express + TypeScript
+- **API**: tRPC for type-safe communication
 - **Database**: PostgreSQL
 - **Real-time**: WebSockets
 
-## Prerequisites
-
-- Node.js (v18 or higher)
-- PostgreSQL (v12 or higher)
-- npm or yarn
-
 ## Quick Start
 
-### 1. Database Setup
+### Prerequisites
+- Node.js (v18+)
+- PostgreSQL (v12+)
 
-Make sure PostgreSQL is running and create a database:
+### Setup
 
+1. **Create database:**
 ```sql
 CREATE DATABASE legorachat;
 ```
 
-### 2. Install and Run
-
-Install all dependencies and start both frontend and backend:
-
+2. **Install and run:**
 ```bash
 npm run install:all
 npm run dev
 ```
 
-This will start:
-- Backend on `http://localhost:3001`
-- Frontend on `http://localhost:3000`
+- Backend: `http://localhost:3001`
+- Frontend: `http://localhost:3000`
 
-The backend will automatically create the necessary database tables and seed test users.
+The app auto-creates tables and seeds test users.
 
-## Usage
-
-1. Open your browser and go to `http://localhost:3000`
-2. Enter any username and password to log in (or create a new account)
-3. Click "New Chat" to start a conversation with other users
-4. Enter usernames separated by commas (e.g., "alice, bob")
-5. Start messaging!
-
-## Pre-seeded Users
-
-The app comes with some pre-seeded users for testing:
-- Username: `alice`, Password: `password123`
-- Username: `bob`, Password: `password123`
-- Username: `charlie`, Password: `password123`
+### Test Users
+- `alice` / `password123`
+- `bob` / `password123` 
+- `charlie` / `password123`
 
 ## Project Structure
 
 ```
 LegoraChat/
-├── backend/                 # Node.js backend
+├── backend/           # Node.js + Express + tRPC
 │   ├── src/
-│   │   ├── server.ts       # Express server setup
-│   │   ├── router.ts       # tRPC router with API endpoints
-│   │   ├── db.ts          # Database operations
-│   │   ├── db-utils.ts    # Database utility functions
-│   │   └── types.ts       # Zod schemas and TypeScript interfaces
-│   ├── dist/              # Compiled JavaScript files
-│   ├── package.json
-│   └── tsconfig.json
-├── frontend/               # React frontend
+│   │   ├── server.ts  # Express server + WebSocket
+│   │   ├── router.ts  # tRPC API routes
+│   │   └── db.ts      # PostgreSQL operations
+├── frontend/          # React + TypeScript + Tailwind
 │   ├── src/
-│   │   ├── components/     # React components
-│   │   │   ├── ChatList.tsx
-│   │   │   ├── ChatView.tsx
-│   │   │   ├── Login.tsx
-│   │   │   └── NewThread.tsx
-│   │   ├── hooks/         # Custom React hooks
-│   │   │   └── useWebSocket.ts
-│   │   ├── utils/         # tRPC client setup
-│   │   │   └── trpc.ts
-│   │   ├── App.tsx        # Main application component
-│   │   ├── main.tsx       # Application entry point
-│   │   ├── types.ts       # TypeScript interfaces (duplicated from backend)
-│   │   └── index.css      # Global styles
-│   ├── dist/              # Built frontend files
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── tailwind.config.js
-│   └── tsconfig.json
-├── docker-compose.yml      # Docker configuration
-├── package.json           # Root package with dev scripts
-└── README.md
+│   │   ├── components/ # Login, ChatList, ChatView, NewThread
+│   │   ├── hooks/     # useWebSocket
+│   │   └── utils/     # tRPC client
+├── shared/            # Shared TypeScript types + Zod schemas
+└── package.json       # Root scripts
 ```
 
-**Note**: Currently, both frontend and backend have their own `types.ts` files with identical interfaces (User, Message, Thread). This creates duplication and potential for type drift. Consider creating a shared types package to eliminate this duplication.
-
-## Development
+## Commands
 
 ```bash
-npm run dev
-```
-
-## Building for Production
-
-```bash
-npm run build
+npm run dev          # Start development servers
+npm run build        # Build for production
+npm run install:all  # Install all dependencies
 ```

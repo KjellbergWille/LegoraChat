@@ -5,10 +5,12 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "tsc && npm run build:clean",
+    "build:clean": "rm -rf dist/backend && rm -rf dist/src",
     "start": "node dist/server.js"
   },
   "dependencies": {
+    "@legorachat/shared": "file:../shared",
     "@trpc/server": "^10.45.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",

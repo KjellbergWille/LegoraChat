@@ -1,7 +1,7 @@
 import { initTRPC } from '@trpc/server';
 import { z } from 'zod';
 import { db } from './db';
-import { loginSchema, createThreadSchema, sendMessageSchema } from './types';
+import { loginSchema, createThreadSchema, sendMessageSchema } from '@legorachat/shared';
 
 const t = initTRPC.context<{ userId?: string }>().create();
 

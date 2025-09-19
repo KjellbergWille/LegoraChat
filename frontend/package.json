@@ -8,6 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@legorachat/shared": "file:../shared",
     "@trpc/client": "^10.45.0",
     "@trpc/react-query": "^10.45.0",
     "@tanstack/react-query": "^4.36.1",

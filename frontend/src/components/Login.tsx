@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { trpc } from '../utils/trpc';
-import { User } from '../types';
+import { User } from '@legorachat/shared';
 
 interface LoginProps {
   onLogin: (user: User) => void;

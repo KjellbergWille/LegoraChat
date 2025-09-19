@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { User, Message, Thread } from './types';
+import { User, Message, Thread } from '@legorachat/shared';
 
 const pool = new Pool({
   user: process.env.DB_USER || 'willekjellberg',

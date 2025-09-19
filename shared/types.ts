@@ -1,3 +1,8 @@
+// Shared type definitions for LegoraChat
+// Used by both frontend and backend
+
+import { z } from 'zod';
+
 export interface User {
   id: string;
   username: string;
@@ -21,9 +26,7 @@ export interface Thread {
   lastMessage?: Message;
 }
 
-
-import { z } from 'zod';
-
+// Zod schemas for validation (backend only)
 export const loginSchema = z.object({
   username: z.string(),
   password: z.string(),

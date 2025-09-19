@@ -1,0 +1,10 @@
+{
+  "name": "@legorachat/shared",
+  "version": "1.0.0",
+  "description": "Shared types and utilities for LegoraChat",
+  "main": "types.ts",
+  "types": "types.ts",
+  "dependencies": {
+    "zod": "^3.22.4"
+  }
+}
