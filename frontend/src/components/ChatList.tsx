@@ -1,24 +1,26 @@
 import { useState } from 'react';
 import { trpc } from '../utils/trpc';
+import { useSSE } from '../hooks/useSSE';
 
 interface ChatListProps {
   onSelectThread: (threadId: string) => void;
   selectedThreadId: string | null;
+  userId: string;
 }
 
-export default function ChatList({ onSelectThread, selectedThreadId }: ChatListProps) {
+export default function ChatList({ onSelectThread, selectedThreadId, userId }: ChatListProps) {
   const [newThreadInput, setNewThreadInput] = useState('');
   const { data: threads, isLoading } = trpc.getThreads.useQuery();
 
-  // Real-time subscription for thread updates
-  trpc.onThreadsUpdate.useSubscription(undefined, {
-    onData: (threads) => {
-      // Update the cache with new threads
-      utils.getThreads.setData(undefined, threads);
+  const utils = trpc.useContext();
+
+  // SSE for real-time updates
+  useSSE(userId, (event) => {
+    if (event.type === 'newThread' || event.type === 'newMessage') {
+      // Refresh threads list
+      utils.getThreads.invalidate();
     }
   });
-
-  const utils = trpc.useContext();
 
   const createThreadMutation = trpc.createThread.useMutation({
     onSuccess: (thread) => {
@@ -65,7 +67,7 @@ export default function ChatList({ onSelectThread, selectedThreadId }: ChatListP
             onChange={(e) => setNewThreadInput(e.target.value)}
             placeholder="Write usernames for new chat..."
             className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            onKeyPress={(e) => e.key === 'Enter' && handleCreateThread()}
+            onKeyDown={(e) => e.key === 'Enter' && handleCreateThread()}
             disabled={createThreadMutation.isPending}
           />
           <button
@@ -73,11 +75,11 @@ export default function ChatList({ onSelectThread, selectedThreadId }: ChatListP
             disabled={!newThreadInput.trim() || createThreadMutation.isPending}
             className="px-3 py-2 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50"
           >
-            {createThreadMutation.isPending ? 'Skapar...' : 'Skapa'}
+            {createThreadMutation.isPending ? 'Creating...' : 'Create'}
           </button>
         </div>
         <p className="text-xs text-gray-500 mt-1">
-          Separera flera användarnamn med komma
+          Separate multiple usernames with commas
         </p>
       </div>
 

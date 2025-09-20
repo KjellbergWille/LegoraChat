@@ -4,10 +4,45 @@ import cors from 'cors';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { initTRPC } from '@trpc/server';
 import { z } from 'zod';
-import { WebSocketServer } from 'ws';
-import { applyWSSHandler } from '@trpc/server/adapters/ws';
 import { db } from './db';
-import { loginSchema, createThreadSchema, sendMessageSchema } from '@legorachat/shared';
+import { 
+  loginSchema, 
+  createThreadSchema, 
+  sendMessageSchema, 
+  AuthenticatedContext, 
+  UnauthenticatedContext,
+  LoginResponse
+} from '@legorachat/shared';
+
+// Global connections map for SSE
+const globalConnections = new Map<string, Set<express.Response>>();
+
+// SSE broadcasting functions
+function broadcastToUser(userId: string, event: any) {
+  const connections = globalConnections.get(userId);
+  if (connections) {
+    const data = `data: ${JSON.stringify(event)}\n\n`;
+    connections.forEach(res => {
+      try {
+        res.write(data);
+      } catch (error) {
+        // Remove dead connections
+        connections.delete(res);
+      }
+    });
+  }
+}
+
+async function broadcastToThread(threadId: string, event: any) {
+  try {
+    const participants = await db.getThreadParticipants(threadId);
+    participants.forEach(userId => {
+      broadcastToUser(userId, event);
+    });
+  } catch (error) {
+    console.error('Error broadcasting to thread:', error);
+  }
+}
 
 // Extend Express Request interface to include userId
 declare global {
@@ -19,57 +54,64 @@ declare global {
 }
 
 const app = express();
-const port = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// Create WebSocket server
-const server = app.listen(port, async () => {
-  console.log(`Server running on http://localhost:${port}`);
-  
-  // Initialize database
-  await db.init();
-  console.log('Database initialized');
-});
-
-const wss = new WebSocketServer({ server });
-
 // Simple auth middleware (in production, use proper JWT)
-const authMiddleware = (req: any, _res: any, next: any) => {
+const authMiddleware = (req: express.Request, _res: express.Response, next: express.NextFunction) => {
   const userId = req.headers['x-user-id'];
-  req.userId = userId;
+  req.userId = typeof userId === 'string' ? userId : undefined;
   next();
 };
 
 // Initialize tRPC
-const t = initTRPC.context<{ userId?: string }>().create();
+const t = initTRPC.context<UnauthenticatedContext>().create();
 
 // Protected procedure helper
 const protectedProcedure = t.procedure.use(({ ctx, next }) => {
   if (!ctx.userId) throw new Error('Not authenticated');
-  return next({ ctx: { userId: ctx.userId } });
+  return next({ ctx: { userId: ctx.userId } as AuthenticatedContext });
 });
 
 // tRPC Router
 const appRouter = t.router({
   login: t.procedure
     .input(loginSchema)
-    .mutation(async ({ input }) => {
-      const user = await db.getUserByUsername(input.username);
-      
-      if (user && user.password === input.password) {
-        return { success: true, user: { id: user.id, username: user.username, password: user.password, createdAt: user.createdAt } };
+    .mutation(async ({ input }): Promise<LoginResponse> => {
+      try {
+        const user = await db.getUserByUsername(input.username);
+        
+        if (user && user.password === input.password) {
+          return { 
+            success: true, 
+            user: { 
+              id: user.id, 
+              username: user.username, 
+              createdAt: user.createdAt 
+            } 
+          };
+        }
+        
+        if (!user) {
+          // Create new user
+          const newUser = await db.createUser(input.username, input.password);
+          return { 
+            success: true, 
+            user: { 
+              id: newUser.id, 
+              username: newUser.username, 
+              createdAt: newUser.createdAt 
+            } 
+          };
+        }
+        
+        return { success: false, error: 'Invalid password' };
+      } catch (error) {
+        console.error('Login error:', error);
+        return { success: false, error: 'Login failed' };
       }
-      
-      if (!user) {
-        // Create new user
-        const newUser = await db.createUser(input.username, input.password);
-        return { success: true, user: { id: newUser.id, username: newUser.username, password: newUser.password, createdAt: newUser.createdAt } };
-      }
-      
-      return { success: false, error: 'Invalid password' };
     }),
 
   getThreads: protectedProcedure
@@ -80,17 +122,23 @@ const appRouter = t.router({
   createThread: protectedProcedure
     .input(createThreadSchema)
     .mutation(async ({ input, ctx }) => {
-      const thread = await db.createThreadWithParticipants(ctx.userId, input.participantUsernames);
-      // Emit to all participants
-      wss.clients.forEach((client) => {
-        if (client.readyState === 1) { // WebSocket.OPEN
-          client.send(JSON.stringify({
-            type: 'threadCreated',
-            data: thread
-          }));
-        }
-      });
-      return thread;
+      try {
+        const thread = await db.createThreadWithParticipants(ctx.userId, input.participantUsernames);
+        
+        // Broadcast new thread to all participants
+        const participants = await db.getThreadParticipants(thread.id);
+        participants.forEach(userId => {
+          broadcastToUser(userId, {
+            type: 'newThread',
+            thread
+          });
+        });
+        
+        return thread;
+      } catch (error) {
+        console.error('Create thread error:', error);
+        throw new Error('Failed to create thread');
+      }
     }),
 
   getMessages: protectedProcedure
@@ -102,57 +150,23 @@ const appRouter = t.router({
   sendMessage: protectedProcedure
     .input(sendMessageSchema)
     .mutation(async ({ input, ctx }) => {
-      const message = await db.addMessage(input.threadId, ctx.userId, input.content);
-      
-      // Emit to all participants of the thread
-      const participants = await db.getThreadParticipants(input.threadId);
-      wss.clients.forEach((client) => {
-        if (client.readyState === 1) { // WebSocket.OPEN
-          client.send(JSON.stringify({
-            type: 'newMessage',
-            data: message,
-            threadId: input.threadId
-          }));
-        }
-      });
-      
-      return message;
-    }),
-
-  // Real-time subscriptions
-  onNewMessage: protectedProcedure
-    .input(z.object({ threadId: z.string() }))
-    .subscription(async function* ({ input }) {
-      // Yield current messages first
-      const messages = await db.getMessagesForThread(input.threadId);
-      yield messages;
-      
-      // Then listen for new messages via WebSocket
-      // This is a simplified implementation - in production use Redis pub/sub
-      while (true) {
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Check every second
-        const newMessages = await db.getMessagesForThread(input.threadId);
-        if (newMessages.length > messages.length) {
-          yield newMessages;
-        }
+      try {
+        const message = await db.addMessage(input.threadId, ctx.userId, input.content);
+        
+        // Broadcast new message to all thread participants
+        await broadcastToThread(input.threadId, {
+          type: 'newMessage',
+          threadId: input.threadId,
+          message
+        });
+        
+        return message;
+      } catch (error) {
+        console.error('Send message error:', error);
+        throw new Error('Failed to send message');
       }
     }),
 
-  onThreadsUpdate: protectedProcedure
-    .subscription(async function* ({ ctx }) {
-      // Yield current threads first
-      const threads = await db.getThreadsForUser(ctx.userId);
-      yield threads;
-      
-      // Then listen for thread updates
-      while (true) {
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Check every second
-        const newThreads = await db.getThreadsForUser(ctx.userId);
-        if (JSON.stringify(newThreads) !== JSON.stringify(threads)) {
-          yield newThreads;
-        }
-      }
-    }),
 });
 
 // tRPC middleware
@@ -163,16 +177,63 @@ app.use('/trpc', authMiddleware, createExpressMiddleware({
   }),
 }));
 
-// Apply WebSocket handler
-applyWSSHandler({
-  wss,
-  router: appRouter,
-  createContext: ({ req }) => {
-    const userId = req.headers['x-user-id'];
-    return {
-      userId: Array.isArray(userId) ? userId[0] : userId,
-    };
-  },
+// SSE endpoint for real-time updates
+app.get('/events/:userId', (req, res) => {
+  const userId = req.params.userId;
+  
+  // Set SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Cache-Control',
+    'X-Accel-Buffering': 'no' // Disable nginx buffering
+  });
+
+  // Send initial connection event
+  res.write(`data: ${JSON.stringify({ type: 'connected' })}\n\n`);
+
+  // Store connection for this user
+  const userConnections = globalConnections.get(userId) || new Set();
+  userConnections.add(res);
+  globalConnections.set(userId, userConnections);
+
+  // Send keep-alive ping every 30 seconds
+  const keepAlive = setInterval(() => {
+    try {
+      res.write(`data: ${JSON.stringify({ type: 'ping' })}\n\n`);
+    } catch (error) {
+      clearInterval(keepAlive);
+    }
+  }, 30000);
+
+  // Handle client disconnect
+  req.on('close', () => {
+    clearInterval(keepAlive);
+    userConnections.delete(res);
+    if (userConnections.size === 0) {
+      globalConnections.delete(userId);
+    }
+  });
+
+  req.on('error', () => {
+    clearInterval(keepAlive);
+    userConnections.delete(res);
+    if (userConnections.size === 0) {
+      globalConnections.delete(userId);
+    }
+  });
+});
+
+// Start server
+const PORT = parseInt(process.env.PORT || '3001');
+app.listen(PORT, async () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+  
+  // Initialize database
+  await db.init();
+  console.log('Database initialized');
 });
 
 export { appRouter };

@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { trpc } from '../utils/trpc';
+import { Message } from '@legorachat/shared';
+import { useSSE } from '../hooks/useSSE';
 
 interface ChatViewProps {
   threadId: string;
@@ -15,24 +17,45 @@ export default function ChatView({ threadId, userId, onBack }: ChatViewProps) {
     { threadId }
   );
 
-  // Real-time subscription for new messages
-  trpc.onNewMessage.useSubscription(
-    { threadId },
-    {
-      onData: (messages) => {
-        // Update the cache with new messages
-        utils.getMessages.setData({ threadId }, messages);
-      }
-    }
-  );
-
   const utils = trpc.useContext();
 
+  // SSE for real-time updates
+  useSSE(userId, (event) => {
+    if (event.type === 'newMessage' && event.threadId === threadId) {
+      // Refresh messages for this thread
+      utils.getMessages.invalidate({ threadId });
+    }
+  });
+
   const sendMessageMutation = trpc.sendMessage.useMutation({
+    onMutate: async (newMessage) => {
+      // Optimistically add message to UI immediately
+      const previousMessages = utils.getMessages.getData({ threadId });
+      
+      const optimisticMessage: Message = {
+        id: 'temp-' + Date.now(),
+        threadId,
+        senderId: userId,
+        content: newMessage.content,
+        senderName: 'You'
+      };
+      
+      utils.getMessages.setData({ threadId }, (old) => [
+        ...(old || []),
+        optimisticMessage
+      ]);
+      
+      return { previousMessages };
+    },
     onSuccess: () => {
       setMessage('');
-      // Invalidate and refetch messages for this thread
+      // Refresh to get real data
       utils.getMessages.invalidate({ threadId });
+      // utils.getThreads.invalidate(); // <- optional if SSE refreshes list already
+    },
+    onError: (_err, _newMessage, context) => {
+      // Revert optimistic update on error
+      utils.getMessages.setData({ threadId }, context?.previousMessages);
     }
   });
 

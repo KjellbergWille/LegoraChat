@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { trpc } from '../utils/trpc';
-import { User } from '@legorachat/shared';
+import { ClientUser } from '@legorachat/shared';
 
 interface LoginProps {
-  onLogin: (user: User) => void;
+  onLogin: (user: ClientUser) => void;
 }
 
 export default function Login({ onLogin }: LoginProps) {
@@ -13,10 +13,10 @@ export default function Login({ onLogin }: LoginProps) {
 
   const loginMutation = trpc.login.useMutation({
     onSuccess: (data) => {
-      if (data.success && 'user' in data) {
+      if (data.success && data.user) {
         onLogin(data.user);
-      } else if ('error' in data) {
-        setError(data.error || 'Login failed');
+      } else if (data.error) {
+        setError(data.error);
       }
     },
     onError: () => {

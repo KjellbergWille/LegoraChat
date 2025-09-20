@@ -1,33 +1,26 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { trpc, createTRPCClient } from './utils/trpc';
 import Login from './components/Login';
 import ChatList from './components/ChatList';
 import ChatView from './components/ChatView';
-import { User } from '@legorachat/shared';
+import { ClientUser } from '@legorachat/shared';
 
 const queryClient = new QueryClient();
 
 function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<ClientUser | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
-  }, []);
+  // Remove localStorage usage - user state will be managed by parent component or context
 
-  const handleLogin = (userData: User) => {
+  const handleLogin = (userData: ClientUser) => {
     setUser(userData);
-    localStorage.setItem('user', JSON.stringify(userData));
   };
 
   const handleLogout = () => {
     setUser(null);
     setSelectedThreadId(null);
-    localStorage.removeItem('user');
   };
 
   // Memoize tRPC client to prevent recreation on every render
@@ -65,6 +58,7 @@ function App() {
           <ChatList
             onSelectThread={setSelectedThreadId}
             selectedThreadId={selectedThreadId}
+            userId={user.id}
           />
         </div>
         <div className="flex-1">
